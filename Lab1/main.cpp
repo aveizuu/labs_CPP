@@ -30,6 +30,12 @@ void solveTwoRoots(double a, double b, double discriminant){
 	cout << "Квадратное уравнение имеет два действительных корня:\nx1 = " << x1 << " x2 = " << x2;
 }
 
+// Функция для решения квадратного уравнения с дискриминантом равным нулю
+void solveOneRoots(double a, double b) {
+	double x1 = -b / (2.0 * a);
+	cout << "Квадратное уравнение имеет один действительный корень:\nx1 = " << x1;
+}
+
 int main() {
 	setlocale(LC_ALL, "Russian");
 	double a, b, c;
@@ -46,7 +52,10 @@ int main() {
 		double discriminant = calculateDiscriminant(a, b, c);
 		
 		if (discriminant > 0) {
-			solveTwoRoots(a, b, discriminant);
+			solveTwoRoots(a, b, discriminant); // Два корня
+		}
+		else if (discriminant == 0) {
+			solveOneRoots(a, b); // Один корень
 		}
 	}
 	
