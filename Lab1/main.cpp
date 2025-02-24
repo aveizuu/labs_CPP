@@ -1,5 +1,4 @@
-﻿#include <iostream>
-#include <cmath>
+﻿#include "main.h"
 #include <clocale>
 using namespace std;
 
@@ -31,10 +30,28 @@ void solveTwoRoots(double a, double b, double discriminant){
 }
 
 // Функция для решения квадратного уравнения с дискриминантом равным нулю
-void solveOneRoots(double a, double b) {
+void solveOneRoot(double a, double b) {
 	double x1 = -b / (2.0 * a);
 	cout << "Квадратное уравнение имеет один действительный корень:\nx1 = " << x1;
 }
+
+// Функция для решения квадратного уравнения с дискриминантом меньше нуля
+void solveComplexRoots(double a, double b, double discriminant) {
+	discriminant = discriminant * -1.0;
+	double realPart = -b / (2.0 * a);
+	double imaginaryPart = sqrt(discriminant) / (2.0 * a);
+
+	if (realPart != 0) {
+		cout << "Квадратное уравнение имеет два комплексных корня:\nx1 = " << realPart << "+" << imaginaryPart << "i"
+			<< " x2 = " << realPart << "-" << imaginaryPart << "i";
+	}
+
+	else {
+		cout << "Квадратное уравнение имеет два комплексных корня:\nx1 = " << imaginaryPart << "i"
+			<< " x2 = " << "-" << imaginaryPart << "i";
+	}
+}
+
 
 int main() {
 	setlocale(LC_ALL, "Russian");
@@ -55,7 +72,10 @@ int main() {
 			solveTwoRoots(a, b, discriminant); // Два корня
 		}
 		else if (discriminant == 0) {
-			solveOneRoots(a, b); // Один корень
+			solveOneRoot(a, b); // Один корень
+		}
+		else {
+			solveComplexRoots(a, b, discriminant); // Комплексные корни
 		}
 	}
 	
