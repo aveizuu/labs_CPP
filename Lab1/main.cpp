@@ -18,6 +18,11 @@ void solveLinear(double b, double c) {
 	}
 }
 
+// Функция, которая считает дискриминант
+double calculateDiscriminant(double a, double b, double c) {
+	return b * b - 4.0 * a * c;
+}
+
 int main() {
 	setlocale(LC_ALL, "Russian");
 	double a, b, c;
@@ -29,7 +34,11 @@ int main() {
 		// Уравнение линейное
 		solveLinear(b, c);
 	}
-
+	// Иначе, уравнение квадратное
+	else {
+		double discriminant = calculateDiscriminant(a, b, c);
+		cout << discriminant;
+	}
 	
 	return 0;
 }
