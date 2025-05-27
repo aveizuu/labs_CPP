@@ -1,115 +1,160 @@
 #include "Ball.h"
-#include "Game.h"
+#include "Paddle.h"
 #include <cmath>
+#include <random>
 
-Ball::Ball(Game& parent, const sf::Vector2f& velocity, float radius, int fallScoreIncrease, const sf::Color& color)
-    : _parent(parent), _velocity(velocity), _fallScoreIncrease(fallScoreIncrease), _velocityNormDefault(std::sqrt(velocity.x*velocity.x + velocity.y*velocity.y)), _lastBoostDuration(0), _colorDefault(color), _boosted(false), _isDead(false) {
-    _shape.setRadius(radius);
-    _shape.setFillColor(color);
-    _shape.setPosition(400, 300);
+Ball::Ball(const sf::Vector2f& pos, float radius)
+    : GameObject(pos, sf::Vector2f(radius * 2, radius * 2)),
+      shape(radius),
+      velocity(100.f, -300.f), // Начальная скорость вверх
+      speed(300.f),
+      isSticky(false),
+      hasBottomShield(false),
+      bottomShieldUsed(false),
+      isStuckToPaddle(false),
+      stuckOffset(0.f, 0.f) {
+    shape.setFillColor(sf::Color::White);
+    shape.setOrigin(radius, radius);
+    shape.setPosition(pos);
 }
 
-void Ball::_move() {
-    if (_parent.isStickyBallAttached()) {
-        auto racket = _parent.getRacket();
-        float racketX = racket->getPosition().x;
-        float racketW = racket->getSize().x;
-        float ballR = getRadius();
-        setPosition({racketX + racketW / 2 - ballR, racket->getPosition().y - 2 * ballR - 0.1f});
+void Ball::update(float deltaTime) {
+    if (!isActive) return;
+    if (isStuckToPaddle) {
+        // позиция мяча будет обновляться извне (Game::update)
+        shape.setPosition(position);
         return;
     }
-    float dt = _parent.getTimeMsSinceLastFrame();
-    _shape.move(dt * _velocity);
+    // Обновление позиции
+    position += velocity * deltaTime;
+    shape.setPosition(position);
 }
 
-void Ball::_update() {
-    _move();
-    _handleWindowCollision();
-    _handleBoost();
+void Ball::draw(sf::RenderWindow& window) {
+    if (isActive) {
+        window.draw(shape);
+    }
 }
 
-void Ball::_handleWindowCollision() {
-    auto& window = _parent.getWindow();
-    auto winSize = window->getSize();
-    auto pos = _shape.getPosition();
-    float radius = _shape.getRadius();
-    if (pos.x < 0 || pos.x + 2 * radius > winSize.x) {
-        _velocity.x = -_velocity.x;
-    }
-    if (pos.y < 0) {
-        _velocity.y = -_velocity.y;
-    }
-    if (pos.y + 2 * radius > winSize.y) {
-        if (_parent.isOneTimeBottomActive()) {
-            _velocity.y = -std::abs(_velocity.y);
-            _parent.setOneTimeBottomActive(false);
+void Ball::handleCollision(GameObject& other) {
+    if (!isActive) return;
+    if (checkCollision(other)) {
+        // Прилипание к Paddle
+        Paddle* paddle = dynamic_cast<Paddle*>(&other);
+        if (isSticky && paddle) {
+            stickToPaddle(paddle->getPosition(), paddle->getSize().x);
             return;
         }
-        if (_parent.isMainBall(this)) {
-            _velocity.y = -std::abs(_velocity.y);
-            _parent.increaseScore(-15);
-        } else {
-            if (!_isDead) {
-                _parent.increaseScore(-15);
-                kill();
-            }
+        // Обработка столкновения с блоком или кареткой
+        sf::FloatRect ballBounds = shape.getGlobalBounds();
+        sf::FloatRect otherBounds = other.getPosition().x >= 0 ?
+            sf::FloatRect(other.getPosition(), other.getSize()) : sf::FloatRect();
+
+        // Определение стороны столкновения
+        float overlapLeft = ballBounds.left + ballBounds.width - otherBounds.left;
+        float overlapRight = otherBounds.left + otherBounds.width - ballBounds.left;
+        float overlapTop = ballBounds.top + ballBounds.height - otherBounds.top;
+        float overlapBottom = otherBounds.top + otherBounds.height - ballBounds.top;
+
+        // Находим минимальное перекрытие
+        float minOverlap = std::min({overlapLeft, overlapRight, overlapTop, overlapBottom});
+
+        if (minOverlap == overlapLeft || minOverlap == overlapRight) {
+            velocity.x = -velocity.x;
+        }
+        if (minOverlap == overlapTop || minOverlap == overlapBottom) {
+            velocity.y = -velocity.y;
+        }
+
+        // Нормализация скорости
+        float length = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+        velocity = (velocity / length) * speed;
+    }
+}
+
+void Ball::setVelocity(const sf::Vector2f& vel) {
+    velocity = vel;
+    // Нормализация скорости
+    float length = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+    velocity = (velocity / length) * speed;
+}
+
+void Ball::setSpeed(float newSpeed) {
+    speed = newSpeed;
+    // Сохраняем направление, но меняем скорость
+    float length = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+    if (length > 0) {
+        velocity = (velocity / length) * speed;
+    }
+}
+
+void Ball::setSticky(bool sticky) {
+    isSticky = sticky;
+}
+
+void Ball::setBottomShield(bool shield) {
+    hasBottomShield = shield;
+    if (shield) {
+        bottomShieldUsed = false;
+    }
+}
+
+void Ball::randomizeTrajectory() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> angleDist(0.f, 1.f);
+    float angle;
+    if (angleDist(gen) < 0.5f) {
+        angle = std::uniform_real_distribution<float>(-60.f, -30.f)(gen);
+    } else {
+        angle = std::uniform_real_distribution<float>(30.f, 60.f)(gen);
+    }
+    float radians = angle * 3.14159f / 180.f;
+    velocity.x = std::sin(radians) * speed;
+    velocity.y = -std::cos(radians) * speed; // всегда вверх
+}
+
+void Ball::handleWallCollision(const sf::Vector2u& windowSize) {
+    float minY = 40.f;
+    if (position.x - shape.getRadius() < 0) {
+        position.x = shape.getRadius();
+        velocity.x = std::abs(velocity.x);
+    }
+    else if (position.x + shape.getRadius() > windowSize.x) {
+        position.x = windowSize.x - shape.getRadius();
+        velocity.x = -std::abs(velocity.x);
+    }
+
+    if (position.y - shape.getRadius() < minY) {
+        position.y = shape.getRadius() + minY;
+        velocity.y = std::abs(velocity.y);
+    }
+    else if (position.y + shape.getRadius() > windowSize.y) {
+        if (hasBottomShield && !bottomShieldUsed) {
+            position.y = windowSize.y - shape.getRadius();
+            velocity.y = -std::abs(velocity.y);
+            bottomShieldUsed = true;
+            hasBottomShield = false;
+        }
+        else {
+            isActive = false;
         }
     }
 }
 
-void Ball::_handleBoost() {
-    if (_boosted) {
-        _boostEndTime -= _parent.getTimeMsSinceLastFrame();
-        if (_boostEndTime <= 0) {
-            _velocity /= _boostMultiplier;
-            _shape.setFillColor(_colorDefault);
-            _boosted = false;
-            _boostMultiplier = 1.0f;
-        }
-    }
+void Ball::stickToPaddle(const sf::Vector2f& paddlePos, float paddleWidth) {
+    isStuckToPaddle = true;
+    // Центрируем мяч относительно Paddle
+    stuckOffset.x = paddleWidth / 2.f;
+    stuckOffset.y = -shape.getRadius() * 2.f;
+    position.x = paddlePos.x + stuckOffset.x;
+    position.y = paddlePos.y + stuckOffset.y;
+    shape.setPosition(position);
+    velocity = {0.f, 0.f};
 }
 
-void Ball::kill() {
-    _isDead = true;
-}
-
-bool Ball::isDead() const {
-    return _isDead;
-}
-
-void Ball::draw() {
-    _update();
-    _parent.getWindow()->draw(_shape);
-}
-
-sf::Vector2f Ball::getPosition() const {
-    return _shape.getPosition();
-}
-
-float Ball::getRadius() const {
-    return _shape.getRadius();
-}
-
-sf::Vector2f Ball::getVelocity() const {
-    return _velocity;
-}
-
-void Ball::setPosition(const sf::Vector2f& pos) {
-    _shape.setPosition(pos);
-}
-
-void Ball::setVelocity(const sf::Vector2f& velocity) {
-    _velocity = velocity;
-}
-
-void Ball::boostUp(float multiplier, float timeMs) {
-    _boostMultiplier = multiplier;
-    _boostEndTime = _parent.getTimeMsSinceLastFrame() + timeMs;
-    _boosted = true;
-    _shape.setFillColor(_boostColor);
-    _velocity *= multiplier;
-}
-
-bool Ball::isBoosted() const {
-    return _boosted;
+void Ball::releaseFromPaddle() {
+    isStuckToPaddle = false;
+    isSticky = false; // сбрасываем эффект прилипания
+    randomizeTrajectory();
 } 

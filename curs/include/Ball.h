@@ -1,40 +1,46 @@
 #pragma once
-#include <SFML/Graphics.hpp>
-#include <memory>
-#include <functional>
-#include <chrono>
-class Game;
+#include "GameObject.h"
 
-class Ball {
-public:
-    Ball(Game& parent, const sf::Vector2f& velocity, float radius, int fallScoreIncrease = -15, const sf::Color& color = sf::Color::Red);
-    void draw();
-    sf::Vector2f getPosition() const;
-    float getRadius() const;
-    sf::Vector2f getVelocity() const;
-    void setPosition(const sf::Vector2f& pos);
-    void setVelocity(const sf::Vector2f& velocity);
-    bool isDead() const;
-    void boostUp(float multiplier, float timeMs);
-    bool isBoosted() const;
-    void kill();
-    Game& getParent() { return _parent; }
+class Ball : public GameObject {
 private:
-    void _move();
-    void _update();
-    void _handleWindowCollision();
-    void _handleBoost();
-    Game& _parent;
-    sf::CircleShape _shape;
-    sf::Vector2f _velocity;
-    int _fallScoreIncrease;
-    float _velocityNormDefault;
-    float _lastBoostDuration;
-    sf::Color _colorDefault;
-    bool _boosted;
-    std::chrono::time_point<std::chrono::system_clock> _lastBoostTimePoint;
-    float _boostMultiplier = 1.0f;
-    float _boostEndTime = 0.0f;
-    sf::Color _boostColor = sf::Color(100, 200, 255);
-    bool _isDead = false;
+    sf::CircleShape shape; // Свой shape для круга
+    sf::Vector2f velocity;
+    float speed;
+    bool isSticky;
+    bool hasBottomShield;
+    bool bottomShieldUsed;
+    bool isStuckToPaddle = false;
+    sf::Vector2f stuckOffset; // смещение относительно Paddle
+
+public:
+    Ball(const sf::Vector2f& pos, float radius);
+    
+    void update(float deltaTime) override;
+    void draw(sf::RenderWindow& window) override;
+    void handleCollision(GameObject& other) override;
+
+    // Методы для управления мячом
+    void setVelocity(const sf::Vector2f& vel);
+    void setSpeed(float newSpeed);
+    void setSticky(bool sticky);
+    void setBottomShield(bool shield);
+    void randomizeTrajectory();
+    
+    // Геттеры
+    const sf::Vector2f& getVelocity() const { return velocity; }
+    float getSpeed() const { return speed; }
+    bool getIsSticky() const { return isSticky; }
+    bool getHasBottomShield() const { return hasBottomShield; }
+    bool getBottomShieldUsed() const { return bottomShieldUsed; }
+    float getRadius() const { return shape.getRadius(); }
+    bool isStuck() const { return isStuckToPaddle; }
+
+    void handleWallCollision(const sf::Vector2u& windowSize);
+
+    void stickToPaddle(const sf::Vector2f& paddlePos, float paddleWidth); //
+    void releaseFromPaddle();
+
+private:
+    void handlePaddleCollision(const GameObject& paddle);
+    void handleBlockCollision(GameObject& block);
 }; 
